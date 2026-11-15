@@ -70,6 +70,15 @@ button { font: inherit; color: inherit; }
 .btn--primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .btn:disabled { opacity: .55; cursor: wait; transform: none; }
 
+.demo-bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 20px; font-size: .82rem; color: #e9d9a6;
+  background: rgba(245, 197, 66, .08); border-bottom: 1px solid rgba(245, 197, 66, .25);
+}
+.demo-bar__links { display: flex; gap: 16px; }
+.demo-bar a { color: var(--media); text-decoration: none; font-weight: 500; }
+.demo-bar a:hover { text-decoration: underline; }
+
 /* ---------- progress */
 .progress { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--bg-alt); border-bottom: 1px solid var(--line); }
 .progress__bar { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
@@ -203,7 +212,7 @@ button { font: inherit; color: inherit; }
 .cmd__label { font: 600 .68rem var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .cmd__box { position: relative; }
 .cmd pre {
-  margin: 0; padding: 10px 44px 10px 12px; border-radius: 8px; background: #0a0d0f; border: 1px solid var(--line);
+  margin: 0; padding: 34px 12px 10px; border-radius: 8px; background: #0a0d0f; border: 1px solid var(--line);
   font: .76rem/1.55 var(--f-mono); color: #d7dde0; white-space: pre-wrap; word-break: break-all;
 }
 .copy {
@@ -259,4 +268,8 @@ button { font: inherit; color: inherit; }
   .panel { border-left: 0; border-top: 1px solid var(--line); }
   .top { flex-wrap: wrap; }
   .progress__label { min-width: 0; }
+  .legend { right: 64px; gap: 4px 10px; font-size: .72rem; }
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+  .tab { padding: 10px 9px; white-space: nowrap; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
 }

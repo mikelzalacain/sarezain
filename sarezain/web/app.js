@@ -3,6 +3,9 @@
 
   // Modo demo: sin backend, con una red de ejemplo (para la versión online del portfolio).
   const DEMO = window.SAREZAIN_DEMO === true || new URLSearchParams(location.search).has("demo");
+  // Sin animaciones si el usuario lo pide al sistema (accesibilidad) o con ?static (capturas).
+  const ANIMATE = !new URLSearchParams(location.search).has("static")
+    && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   const COLORS = {
     critica: "#ff4d5e", alta: "#ff8a3d", media: "#f5c542", baja: "#5aa9ff", info: "#8f999e", ok: "#3ddc97",
@@ -161,7 +164,12 @@
     renderDevice();
   }
 
+  let layoutReady = false;
+  const layoutWaiters = [];
+  const whenLayoutReady = (fn) => (layoutReady ? fn() : layoutWaiters.push(fn));
+
   function renderMap() {
+    layoutReady = false;
     const gw = scan.hosts.find((h) => h.is_gateway) || scan.hosts[0];
     const elements = [];
     for (const h of scan.hosts) {
@@ -180,7 +188,7 @@
     cy = cytoscape({
       container: $("#cy"),
       elements,
-      minZoom: 0.3, maxZoom: 2.5, wheelSensitivity: 0.25,
+      minZoom: 0.3, maxZoom: 2.5,
       style: [
         { selector: "node", style: {
           width: "data(size)", height: "data(size)", "background-color": "#181d20",
@@ -193,20 +201,54 @@
           "transition-property": "border-width, width, height", "transition-duration": "0.25s",
         } },
         { selector: "node.self", style: { "border-style": "double", "border-width": 5 } },
-        { selector: "node.new", style: { "overlay-color": "#c792ea", "overlay-opacity": 0.08, "overlay-padding": 6 } },
+        { selector: "node.new", style: { "border-style": "dashed", "border-color": "#c792ea" } },
         { selector: "node:active", style: { "overlay-opacity": 0 } },
-        { selector: "node:selected", style: { "border-width": 5, "underlay-color": "data(color)", "underlay-opacity": 0.18, "underlay-padding": 10 } },
+        { selector: "node:selected", style: { "border-width": 5, "underlay-color": "data(color)", "underlay-opacity": 0.18, "underlay-padding": 10, "underlay-shape": "ellipse" } },
         { selector: "edge", style: {
           width: 1.5, "line-color": "data(color)", "line-opacity": 0.35, "curve-style": "straight",
         } },
         { selector: "node.dim", style: { opacity: 0.25 } },
         { selector: "edge.dim", style: { opacity: 0.08 } },
       ],
-      layout: {
-        name: "concentric", concentric: (n) => (n.data("isGw") ? 10 : 1), levelWidth: () => 1,
-        minNodeSpacing: 46, animate: true, animationDuration: 600, padding: 50,
-      },
+      layout: { name: "preset" },
     });
+
+    const LAYOUT = {
+      name: "concentric", concentric: (n) => (n.data("isGw") ? 10 : 1), levelWidth: () => 1,
+      minNodeSpacing: 46, padding: 50,
+    };
+    let laidOut = false;
+    const relayout = (animate) => {
+      if (!cy) return;
+      cy.resize();
+      const box = $("#cy").getBoundingClientRect();
+      if (box.width < 50 || box.height < 50) return;  // aún sin tamaño: lo hará el ResizeObserver
+      const markReady = () => {
+        if (layoutReady) return;
+        layoutReady = true;
+        layoutWaiters.splice(0).forEach((fn) => fn());
+      };
+      cy.one("layoutstop", markReady);
+      cy.layout({ ...LAYOUT, animate, animationDuration: 600 }).run();
+      setTimeout(markReady, animate ? 900 : 0);  // red de seguridad si el evento no llega
+      laidOut = true;
+    };
+    relayout(ANIMATE);
+
+    // Si el contenedor cambia de tamaño (giro del móvil, ventana redimensionada), recolocar el mapa.
+    if (window.ResizeObserver) {
+      let t;
+      const ro = new ResizeObserver(() => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          if (!laidOut) relayout(ANIMATE);
+          else if (!selectedIp) relayout(false);
+          else cy.resize();
+        }, 150);
+      });
+      ro.observe($("#cy"));
+      cy.one("destroy", () => ro.disconnect());
+    }
 
     cy.on("tap", "node", (e) => selectDevice(e.target.id()));
     cy.on("tap", (e) => { if (e.target === cy) clearSelection(); });
@@ -458,7 +500,9 @@
       const node = cy.getElementById(ip);
       node.select();
       cy.elements().not(node.closedNeighborhood()).addClass("dim");
-      cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 1.1) }, { duration: 350 });
+      const view = { center: { eles: node }, zoom: Math.max(cy.zoom(), 1.1) };
+      if (ANIMATE) cy.animate(view, { duration: 350 });
+      else { cy.zoom(view.zoom); cy.center(node); }
     }
     renderDevice();
     renderSummary();
@@ -486,11 +530,26 @@
   $("#history").addEventListener("change", async (e) => render(await api.load(e.target.value)));
 
   (async () => {
-    if (DEMO) document.querySelector(".demo-badge").hidden = false;
+    if (DEMO) {
+      document.querySelector(".demo-badge").hidden = false;
+      $("#demo-bar").hidden = false;
+      document.title = "Sarezain · Demo";
+    }
     api.info().then((info) => {
       if (info && !scan) $("#net-chip").textContent = info.local.network;
     }).catch(() => {});
     render(await api.latest().catch(() => null));
     refreshHistory();
+
+    // Enlaces directos: #ip=192.168.1.20 abre esa ficha · #tab=findings abre una pestaña
+    const hash = new URLSearchParams(location.hash.slice(1));
+    if (scan && hash.get("ip") && scan.hosts.some((h) => h.ip === hash.get("ip"))) {
+      whenLayoutReady(() => {
+        selectDevice(hash.get("ip"));
+        if (hash.get("open")) document.querySelector("#view-device .finding__head")?.click();
+      });
+    } else if (hash.get("tab")) {
+      switchTab(hash.get("tab"));
+    }
   })();
 })();
