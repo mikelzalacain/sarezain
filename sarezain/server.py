@@ -22,6 +22,8 @@ _task: asyncio.Task | None = None
 
 class ScanRequest(BaseModel):
     network: str | None = None
+    profile: str = "completo"
+    cves: bool = True
 
 
 @app.get("/api/info")
@@ -53,7 +55,7 @@ async def start_scan(req: ScanRequest):
         state.update(status="running", error=None, progress=0.0, phase="discovery",
                      label="Preparando", scan_id=None)
         try:
-            result = await scanner.run_scan(req.network, progress)
+            result = await scanner.run_scan(req.network, progress, profile=req.profile, check_cves=req.cves)
             state.update(status="done", scan_id=result["id"])
         except Exception as exc:  # se muestra en el panel
             state.update(status="error", error=str(exc) or type(exc).__name__)

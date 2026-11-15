@@ -19,15 +19,17 @@ _POOL = ThreadPoolExecutor(max_workers=64, thread_name_prefix="sarezain")
 PROBE_PORTS = (80, 443, 445, 22, 139, 3389, 8080, 62078, 8008, 554)
 
 
-def _ping(ip: str) -> bool:
+def _ping(ip: str) -> int | None:
+    """Devuelve el TTL de la respuesta (pista del sistema operativo) o None."""
     cmd = ["ping", "-n", "1", "-w", "700", ip] if IS_WINDOWS else ["ping", "-c", "1", "-W", "1", ip]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=4,
                              creationflags=NO_WINDOW, encoding="utf-8", errors="replace")
     except (OSError, subprocess.SubprocessError):
-        return False
+        return None
     # En Windows "host inaccesible" también devuelve 0: se exige TTL en la respuesta.
-    return out.returncode == 0 and "ttl=" in out.stdout.lower()
+    m = re.search(r"ttl[=:](\d+)", out.stdout, re.IGNORECASE)
+    return int(m.group(1)) if out.returncode == 0 and m else None
 
 
 async def _tcp_alive(ip: str, sem: asyncio.Semaphore) -> bool:
@@ -91,6 +93,8 @@ def ssdp_discover(timeout: float = 2.5) -> dict[str, dict]:
     try:
         s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         s.settimeout(timeout)
+        # UDP puede perder paquetes: se envía dos veces.
+        s.sendto(msg, ("239.255.255.250", 1900))
         s.sendto(msg, ("239.255.255.250", 1900))
         while True:
             try:
@@ -113,12 +117,15 @@ async def discover(network: ipaddress.IPv4Network, progress=None) -> dict[str, d
     loop = asyncio.get_running_loop()
     hosts = [str(h) for h in network.hosts()]
     alive: dict[str, set] = {}
+    ttls: dict[str, int] = {}
     done = 0
 
     async def ping(ip: str):
         nonlocal done
-        if await loop.run_in_executor(_POOL, _ping, ip):
+        ttl = await loop.run_in_executor(_POOL, _ping, ip)
+        if ttl:
             alive.setdefault(ip, set()).add("ping")
+            ttls[ip] = ttl
         done += 1
         if progress and done % 8 == 0:
             progress(done / len(hosts) * 0.5)
@@ -151,5 +158,5 @@ async def discover(network: ipaddress.IPv4Network, progress=None) -> dict[str, d
         if ipaddress.ip_address(ip) in network:
             alive.setdefault(ip, set()).add("ssdp")
 
-    return {ip: {"mac": arp.get(ip), "via": sorted(via), "ssdp": ssdp.get(ip)}
+    return {ip: {"mac": arp.get(ip), "via": sorted(via), "ssdp": ssdp.get(ip), "ttl": ttls.get(ip)}
             for ip, via in alive.items()}

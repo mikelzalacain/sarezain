@@ -25,7 +25,7 @@ def cmd_scan(args) -> int:
             print(f"\r[{value * 100:5.1f}%] {label:<26}", end="", flush=True)
 
     try:
-        result = asyncio.run(scanner.run_scan(args.network, progress))
+        result = asyncio.run(scanner.run_scan(args.network, progress, profile=args.profile, check_cves=not args.no_cve))
     except safety.UnsafeTargetError as exc:
         print(f"\nError: {exc}", file=sys.stderr)
         return 2
@@ -34,14 +34,21 @@ def cmd_scan(args) -> int:
         return 0
 
     s = result["summary"]
-    print(f"\n\nRed {result['network']} · {s['hosts']} dispositivos · {s['open_ports']} puertos abiertos · "
-          f"{result['duration']} s · riesgo {s['risk']}/100 ({LEVEL_LABEL[s['level']]})\n")
+    print(f"\n\nRed {result['network']} · {s['hosts']} dispositivos · {s['open_ports']} puertos abiertos "
+          f"({result['ports_scanned']} analizados por equipo) · {result['duration']} s · "
+          f"riesgo {s['risk']}/100 ({LEVEL_LABEL[s['level']]})\n")
+    for title, block in (("RED", result["network_audit"]), ("ESTE EQUIPO", result.get("local_audit") or {})):
+        if block.get("findings"):
+            print(f"  [{title}]")
+            for fnd in block["findings"]:
+                print(f"      - [{LEVEL_LABEL[fnd['severity']]}] {fnd['title']} → {fnd['fix']}")
+    print("  [DISPOSITIVOS]")
     for h in sorted(result["hosts"], key=lambda x: -x["risk"]):
-        name = h["hostname"] or h["vendor"] or "?"
+        name = h["model"] or h["hostname"] or h["vendor"] or "?"
         ports_txt = ",".join(str(x["port"]) for x in h["services"]) or "-"
-        print(f"  {h['ip']:<15} {h['type']:<11} {LEVEL_LABEL[h['level']]:<8} {name[:34]:<34} puertos: {ports_txt}")
+        print(f"  {h['ip']:<15} {h['type']:<11} {LEVEL_LABEL[h['level']]:<8} {name[:34]:<34} {h.get('os') or '':<22} puertos: {ports_txt}")
         for fnd in h["findings"]:
-            print(f"      - [{LEVEL_LABEL[fnd['severity']]}] {fnd['title']}")
+            print(f"      - [{LEVEL_LABEL[fnd['severity']]}] {fnd['title']} → {fnd['fix']}")
     return 0
 
 
@@ -67,6 +74,9 @@ def main() -> int:
     p_scan = sub.add_parser("scan", help="escanear desde la terminal")
     p_scan.add_argument("network", nargs="?", help="red a escanear (CIDR). Por defecto, la red local")
     p_scan.add_argument("--json", action="store_true", help="salida en JSON")
+    p_scan.add_argument("--profile", choices=["rapido", "completo"], default="completo",
+                        help="rapido: 60 puertos · completo: ~1.150 puertos (por defecto)")
+    p_scan.add_argument("--no-cve", action="store_true", help="no consultar la base de datos de CVE (sin Internet)")
     p_scan.set_defaults(func=cmd_scan)
 
     p_serve = sub.add_parser("serve", help="abrir el panel web (por defecto)")

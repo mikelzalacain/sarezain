@@ -14,7 +14,7 @@ import ssl
 import tempfile
 from datetime import datetime, timezone
 
-from .ports import HTTP_PORTS, HTTPS_PORTS, SERVICES
+from .ports import HTTP_PORTS, HTTPS_PORTS, service_name
 
 TIMEOUT = 3.0
 UA = "Sarezain/0.1 (auditoria de red local)"
@@ -301,7 +301,7 @@ async def probe_json_api(ip: str, port: int, path: str) -> dict:
 # ---------------------------------------------------------------- despachador
 
 async def probe_port(ip: str, port: int) -> dict:
-    result: dict = {"port": port, "service": SERVICES.get(port, "desconocido")}
+    result: dict = {"port": port, "service": service_name(port)}
     try:
         if port in HTTPS_PORTS:
             result.update(await probe_http(ip, port, tls=True))
