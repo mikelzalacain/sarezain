@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sarezain = "sarezain.__main__:main"
+sarezain = "sarezain.__main__:run"
 
 [project.urls]
 Homepage = "https://mikelzalacain.com"

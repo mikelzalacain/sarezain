@@ -5,6 +5,7 @@
 *Sarezain* viene del euskera: *sare* (red) + *zain* (guardián).
 
 **[▶ Probar la demo online](https://sarezain.mikelzalacain.com)** — con una red ficticia, sin instalar nada.
+**[⬇ Descargar para Windows (Sarezain.exe)](https://github.com/mikelzalacain/sarezain/releases/latest/download/Sarezain.exe)** — un solo archivo, sin instalación.
 
 ![Mapa de la red con los dispositivos coloreados por riesgo](docs/mapa.png)
 
@@ -51,7 +52,29 @@ El resumen ordena todo en un **plan de acción** priorizado.
 
 ![Auditoría de la red: Wi-Fi, DNS y puertos abiertos a Internet](docs/red.png)
 
-## Instalación
+## Descarga para Windows (recomendado)
+
+1. Descarga **[Sarezain.exe](https://github.com/mikelzalacain/sarezain/releases/latest/download/Sarezain.exe)** desde [Releases](https://github.com/mikelzalacain/sarezain/releases).
+2. Haz doble clic. Se abre una ventana (déjala abierta) y el panel en tu navegador.
+3. Pulsa **Escanear red**. Para salir, cierra la ventana.
+
+> **Aviso de Windows SmartScreen**: el ejecutable no está firmado con un certificado de pago, así que la
+> primera vez Windows puede mostrar *"Windows protegió su PC"*. Pulsa **Más información → Ejecutar de todas formas**.
+> Si tienes **Control inteligente de aplicaciones** (Smart App Control) activado en Windows 11, puede bloquearlo
+> sin opción de ejecutarlo: en ese caso usa la [instalación con Python](#instalación-con-python-windows-linux-macos).
+> Algunos antivirus desconfían de los programas empaquetados con PyInstaller que además escanean la red;
+> es un falso positivo, y el código fuente completo está en este repositorio para quien quiera revisarlo
+> o compilarlo por su cuenta.
+
+Comprueba que el archivo no se ha alterado comparando su huella con la publicada en la release (`Sarezain.exe.sha256`):
+
+```powershell
+Get-FileHash .\Sarezain.exe -Algorithm SHA256
+```
+
+También funciona desde la terminal: `Sarezain.exe scan`, `Sarezain.exe scan --json > informe.json`.
+
+## Instalación con Python (Windows, Linux, macOS)
 
 Requiere **Python 3.10+**.
 
@@ -73,6 +96,13 @@ sarezain scan --profile rapido --no-cve
 ```
 
 Opcional: con una [clave gratuita de la NVD](https://nvd.nist.gov/developers/request-an-api-key) en la variable `SAREZAIN_NVD_KEY` la consulta de CVE es más rápida.
+
+### Compilar el .exe
+
+```bash
+pip install pyinstaller pillow
+python packaging/build_exe.py      # → dist/Sarezain.exe y su .sha256
+```
 
 ## Seguridad y ética
 
@@ -98,6 +128,8 @@ sarezain/
   scanner.py      orquestación por fases
   server.py       API local (FastAPI)
   web/            panel (HTML/CSS/JS + Cytoscape.js)
+packaging/
+  build_exe.py    construye Sarezain.exe (PyInstaller, icono y versión)
 tools/
   update_oui.py   actualiza la base de fabricantes del IEEE
   make_demo.py    genera la red ficticia de la demo con el motor real

@@ -52,17 +52,35 @@ def cmd_scan(args) -> int:
     return 0
 
 
+def _port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket() as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def cmd_serve(args) -> int:
     import threading
     import webbrowser
 
     import uvicorn
 
+    from .server import app  # objeto directo: funciona también empaquetado (.exe)
+
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Sarezain {__version__} · panel en {url}  (Ctrl+C para salir)")
+    if _port_in_use(args.port):
+        # Probablemente Sarezain ya está abierto: reutilizarlo en vez de fallar.
+        print(f"Sarezain ya está en marcha en {url}; abriendo el panel…")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return 0
+
+    print(f"Sarezain {__version__}")
+    print(f"Panel abierto en {url}")
+    print("Deja esta ventana abierta mientras lo uses. Para salir, ciérrala o pulsa Ctrl+C.\n")
     if not args.no_browser:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
-    uvicorn.run("sarezain.server:app", host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
 
 
@@ -90,5 +108,25 @@ def main() -> int:
     return args.func(args)
 
 
+def run() -> int:
+    """Entrada del .exe: si algo falla, deja la ventana abierta para poder leer el error."""
+    # Al redirigir la salida (> informe.txt, tuberías) Windows usa cp1252, que no tiene → · ✓…
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    try:
+        return main()
+    except KeyboardInterrupt:
+        return 0
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        if getattr(sys, "frozen", False):
+            input("\nSe ha producido un error. Pulsa Enter para cerrar…")
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())
